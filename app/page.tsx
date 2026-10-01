@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function Home() {
-  // Le decimos a TypeScript que 'tareas' será un arreglo de cualquier tipo por ahora
   const [tareas, setTareas] = useState<any[]>([])
   const [nuevaTarea, setNuevaTarea] = useState('')
 
@@ -29,11 +28,39 @@ export default function Home() {
     }
   }
 
+  // --- NUEVA FUNCIÓN: ELIMINAR ---
+  async function eliminarTarea(id: number) {
+    // 1. Le decimos a Supabase que borre la fila donde el id coincida
+    const { error } = await supabase.from('tareas').delete().eq('id', id)
+    
+    if (error) {
+      console.log("Error al eliminar:", error)
+    } else {
+      // 2. Si se borra en la base de datos, la quitamos de nuestra pantalla
+      setTareas(tareas.filter((tarea) => tarea.id !== id))
+    }
+  }
+
+  // --- NUEVA FUNCIÓN: ACTUALIZAR (COMPLETAR) ---
+  async function toggleCompletada(id: number, estadoActual: boolean) {
+    // 1. Le decimos a Supabase que invierta el estado (si era true, pasa a false y viceversa)
+    const { error } = await supabase.from('tareas').update({ completada: !estadoActual }).eq('id', id)
+    
+    if (error) {
+      console.log("Error al actualizar:", error)
+    } else {
+      // 2. Actualizamos la pantalla para reflejar el cambio
+      setTareas(tareas.map((tarea) => 
+        tarea.id === id ? { ...tarea, completada: !estadoActual } : tarea
+      ))
+    }
+  }
+
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+    <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '600px' }}>
       <h1>Mi Gestor de Tareas</h1>
       
-      <form onSubmit={agregarTarea} style={{ marginBottom: '1rem' }}>
+      <form onSubmit={agregarTarea} style={{ marginBottom: '2rem' }}>
         <input
           type="text"
           value={nuevaTarea}
@@ -47,8 +74,41 @@ export default function Home() {
 
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {tareas.map((tarea: any) => (
-          <li key={tarea.id} style={{ padding: '0.5rem 0', borderBottom: '1px solid #333' }}>
-            {tarea.titulo} {tarea.completada ? '✅' : '⏳'}
+          <li key={tarea.id} style={{ 
+            padding: '0.8rem', 
+            borderBottom: '1px solid #ddd',
+            display: 'flex',
+            justifyContent: 'space-between', // Separa el texto del botón
+            alignItems: 'center'
+          }}>
+            
+            {/* Texto de la tarea que se puede hacer clic para tachar */}
+            <span 
+              onClick={() => toggleCompletada(tarea.id, tarea.completada)}
+              style={{ 
+                cursor: 'pointer', 
+                textDecoration: tarea.completada ? 'line-through' : 'none',
+                color: tarea.completada ? 'gray' : 'inherit'
+              }}
+            >
+              {tarea.completada ? '✅' : '⏳'} {tarea.titulo}
+            </span>
+
+            {/* Botón rojo de borrar */}
+            <button 
+              onClick={() => eliminarTarea(tarea.id)}
+              style={{ 
+                padding: '0.3rem 0.6rem', 
+                backgroundColor: '#ff4d4d', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Borrar
+            </button>
+            
           </li>
         ))}
       </ul>
