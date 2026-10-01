@@ -16,7 +16,6 @@ export default function Home() {
       setUsuario(session?.user ?? null)
       setCargandoAuth(false)
     })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUsuario(session?.user ?? null)
     })
@@ -71,9 +70,45 @@ export default function Home() {
     }
   }
 
+  // --- NUEVA FUNCIÓN: SUBIR ARCHIVO ---
+  async function subirArchivo(e: React.ChangeEvent<HTMLInputElement>, idTarea: number) {
+    const archivo = e.target.files?.[0]
+    if (!archivo) return
+
+    alert("Subiendo archivo, por favor espera...")
+
+    // 1. Crear un nombre único para no sobreescribir archivos (ID de tarea + nombre original)
+    const nombreUnico = `${idTarea}-${Date.now()}-${archivo.name}`
+
+    // 2. Subir el archivo al Storage de Supabase
+    const { error: uploadError } = await supabase.storage
+      .from('archivos')
+      .upload(nombreUnico, archivo)
+
+    if (uploadError) {
+      alert("Error al subir: " + uploadError.message)
+      return
+    }
+
+    // 3. Obtener el enlace público de descarga
+    const { data: { publicUrl } } = supabase.storage
+      .from('archivos')
+      .getPublicUrl(nombreUnico)
+
+    // 4. Guardar ese enlace en nuestra base de datos en la tarea correspondiente
+    const { error: dbError } = await supabase
+      .from('tareas')
+      .update({ archivo_url: publicUrl })
+      .eq('id', idTarea)
+
+    if (!dbError) {
+      // 5. Actualizar la pantalla (esto OCULTA el botón y muestra el enlace)
+      setTareas(tareas.map((t) => t.id === idTarea ? { ...t, archivo_url: publicUrl } : t))
+    }
+  }
+
   if (cargandoAuth) return <div>Cargando sistema...</div>
 
-  // PANTALLA 1: LOGIN
   if (!usuario) {
     return (
       <div className="contenedor">
@@ -91,7 +126,6 @@ export default function Home() {
     )
   }
 
-  // PANTALLA 2: APLICACIÓN
   return (
     <div className="contenedor">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -110,14 +144,34 @@ export default function Home() {
 
       <ul>
         {tareas.map((tarea: any) => (
-          <li key={tarea.id}>
-            <span 
-              onClick={() => toggleCompletada(tarea.id, tarea.completada)}
-              style={{ cursor: 'pointer', textDecoration: tarea.completada ? 'line-through' : 'none', color: tarea.completada ? '#9ca3af' : 'inherit', flex: 1 }}
-            >
-              {tarea.completada ? '✅ ' : '⏳ '} {tarea.titulo}
-            </span>
-            <button onClick={() => eliminarTarea(tarea.id)} className="btn-rojo">Borrar</button>
+          <li key={tarea.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
+            
+            {/* Fila superior: Texto de la tarea y botón de borrar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+              <span 
+                onClick={() => toggleCompletada(tarea.id, tarea.completada)}
+                style={{ cursor: 'pointer', textDecoration: tarea.completada ? 'line-through' : 'none', color: tarea.completada ? '#9ca3af' : 'inherit', flex: 1 }}
+              >
+                {tarea.completada ? '✅ ' : '⏳ '} {tarea.titulo}
+              </span>
+              <button onClick={() => eliminarTarea(tarea.id)} className="btn-rojo">Borrar</button>
+            </div>
+
+            {/* Fila inferior: Lógica del archivo (Muestra enlace O botón de subir) */}
+            <div style={{ paddingLeft: '1.5rem' }}>
+              {tarea.archivo_url ? (
+                <a href={tarea.archivo_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.85rem', color: '#3b82f6', textDecoration: 'none', fontWeight: 'bold' }}>
+                  📎 Ver adjunto
+                </a>
+              ) : (
+                <input 
+                  type="file" 
+                  onChange={(e) => subirArchivo(e, tarea.id)} 
+                  style={{ fontSize: '0.75rem', padding: '0.2rem', border: 'none' }}
+                />
+              )}
+            </div>
+
           </li>
         ))}
       </ul>
